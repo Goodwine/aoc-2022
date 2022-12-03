@@ -18,15 +18,12 @@ where
 }
 
 pub fn lines(path: String) -> Vec<String> {
-  let mut lines = fs::read_to_string(path)
+  return fs::read_to_string(path)
     .unwrap()
+    .trim()
     .split("\n")
     .map(|line| line.to_string())
-    .collect::<Vec<String>>();
-
-  lines.resize(lines.len() - 1, "".to_string());
-
-  return lines;
+    .collect();
 }
 
 fn internal_solve<D, T1, T2>(
