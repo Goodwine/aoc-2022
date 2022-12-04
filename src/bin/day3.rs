@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use aoc;
 
 fn main() {
@@ -24,29 +22,61 @@ fn main() {
   );
 }
 
-fn p1(data: Vec<Vec<u8>>) -> u32 {
+struct Mask([bool; 53]);
+
+impl FromIterator<u8> for Mask {
+  fn from_iter<T: IntoIterator<Item = u8>>(iter: T) -> Self {
+    let mut mask = Mask([false; 53]);
+    for v in iter {
+      mask.0[v as usize] = true;
+    }
+    return mask;
+  }
+}
+
+impl FromIterator<usize> for Mask {
+  fn from_iter<T: IntoIterator<Item = usize>>(iter: T) -> Self {
+    let mut mask = Mask([false; 53]);
+    for v in iter {
+      mask.0[v] = true;
+    }
+    return mask;
+  }
+}
+
+impl Mask {
+  fn intersect(&mut self, other: &Mask) -> &mut Mask {
+    for (i, v) in other.0.iter().enumerate() {
+      self.0[i] &= v;
+    }
+    return self;
+  }
+}
+
+fn p1(data: Vec<Vec<u8>>) -> usize {
   return data
     .iter()
     .map(|line| {
       let mid = line.len() / 2;
       let (left, right) = line.split_at(mid);
-      let a: HashSet<&u8> = left.iter().collect();
-      let b: HashSet<&u8> = right.iter().collect();
-      return a.intersection(&b).next().unwrap().to_owned().to_owned() as u32;
+      let mut a: Mask = left.iter().map(|&x| x).collect();
+      let b: Mask = right.iter().map(|&x| x).collect();
+
+      return a.intersect(&b).0.iter().position(|&v| v).unwrap_or(0);
     })
     .sum();
 }
 
-fn p2(data: Vec<Vec<u8>>) -> u32 {
+fn p2(data: Vec<Vec<u8>>) -> usize {
   return data
     .chunks(3)
     .map(|chunk| {
-      let mut a: HashSet<&u8> = chunk[0].iter().collect();
-      let b: HashSet<&u8> = chunk[1].iter().collect();
-      let c: HashSet<&u8> = chunk[2].iter().collect();
-      a.retain(|&k| b.contains(k) && c.contains(k));
+      let mut a: Mask = chunk[0].iter().map(|&x| x).collect();
+      let b: Mask = chunk[1].iter().map(|&x| x).collect();
+      let c: Mask = chunk[2].iter().map(|&x| x).collect();
+      let intersection = a.intersect(&b).intersect(&c);
 
-      return a.iter().next().unwrap().to_owned().to_owned() as u32;
+      return intersection.0.iter().position(|&v| v).unwrap_or(0);
     })
     .sum();
 }
