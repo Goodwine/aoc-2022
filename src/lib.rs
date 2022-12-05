@@ -20,7 +20,7 @@ where
 pub fn lines(path: String) -> Vec<String> {
   return fs::read_to_string(path)
     .unwrap()
-    .trim()
+    .trim_end()
     .split("\n")
     .map(|line| line.to_string())
     .collect();
