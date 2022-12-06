@@ -5,24 +5,15 @@ fn main() {
     &|path| {
       aoc::lines(path)
         .iter()
-        .map(|line| line.chars())
-        .map(|line| {
-          line
-            .map(|c| match c {
-              'a'..='z' => (c as u8) - b'a' + 1,
-              'A'..='Z' => (c as u8) - b'A' + 1 + 26,
-              _ => panic!("impossible!"),
-            })
-            .collect::<Vec<u8>>()
-        })
-        .collect::<Vec<Vec<u8>>>()
+        .map(|line| line.chars().collect())
+        .collect::<Vec<Vec<char>>>()
     },
     &p1,
     &p2,
   );
 }
 
-fn p1(data: Vec<Vec<u8>>) -> usize {
+fn p1(data: Vec<Vec<char>>) -> usize {
   return data
     .iter()
     .map(|line| {
@@ -36,7 +27,7 @@ fn p1(data: Vec<Vec<u8>>) -> usize {
     .sum();
 }
 
-fn p2(data: Vec<Vec<u8>>) -> usize {
+fn p2(data: Vec<Vec<char>>) -> usize {
   return data
     .chunks(3)
     .map(|chunk| {
