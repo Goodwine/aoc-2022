@@ -1,4 +1,4 @@
-use aoc;
+use aoc::{self, CharMask};
 
 fn main() {
   aoc::solve(
@@ -22,47 +22,16 @@ fn main() {
   );
 }
 
-struct Mask([bool; 53]);
-
-impl FromIterator<u8> for Mask {
-  fn from_iter<T: IntoIterator<Item = u8>>(iter: T) -> Self {
-    let mut mask = Mask([false; 53]);
-    for v in iter {
-      mask.0[v as usize] = true;
-    }
-    return mask;
-  }
-}
-
-impl FromIterator<usize> for Mask {
-  fn from_iter<T: IntoIterator<Item = usize>>(iter: T) -> Self {
-    let mut mask = Mask([false; 53]);
-    for v in iter {
-      mask.0[v] = true;
-    }
-    return mask;
-  }
-}
-
-impl Mask {
-  fn intersect(&mut self, other: &Mask) -> &mut Mask {
-    for (i, v) in other.0.iter().enumerate() {
-      self.0[i] &= v;
-    }
-    return self;
-  }
-}
-
 fn p1(data: Vec<Vec<u8>>) -> usize {
   return data
     .iter()
     .map(|line| {
       let mid = line.len() / 2;
       let (left, right) = line.split_at(mid);
-      let mut a: Mask = left.iter().map(|&x| x).collect();
-      let b: Mask = right.iter().map(|&x| x).collect();
+      let mut a: CharMask = left.iter().map(|&x| x).collect();
+      let b: CharMask = right.iter().map(|&x| x).collect();
 
-      return a.intersect(&b).0.iter().position(|&v| v).unwrap_or(0);
+      return a.intersect(&b).into_iter().find(|_| true).unwrap_or(0);
     })
     .sum();
 }
@@ -71,12 +40,12 @@ fn p2(data: Vec<Vec<u8>>) -> usize {
   return data
     .chunks(3)
     .map(|chunk| {
-      let mut a: Mask = chunk[0].iter().map(|&x| x).collect();
-      let b: Mask = chunk[1].iter().map(|&x| x).collect();
-      let c: Mask = chunk[2].iter().map(|&x| x).collect();
+      let mut a: CharMask = chunk[0].iter().map(|&x| x).collect();
+      let b: CharMask = chunk[1].iter().map(|&x| x).collect();
+      let c: CharMask = chunk[2].iter().map(|&x| x).collect();
       let intersection = a.intersect(&b).intersect(&c);
 
-      return intersection.0.iter().position(|&v| v).unwrap_or(0);
+      return intersection.into_iter().find(|_| true).unwrap_or(0);
     })
     .sum();
 }

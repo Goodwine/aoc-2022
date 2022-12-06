@@ -84,3 +84,68 @@ impl Display for Duration {
     return write!(f, "{output}");
   }
 }
+
+#[derive(Copy, Clone)]
+pub struct CharMask([bool; 53]);
+
+impl FromIterator<u8> for CharMask {
+  fn from_iter<T: IntoIterator<Item = u8>>(iter: T) -> Self {
+    let mut mask = CharMask([false; 53]);
+    for v in iter {
+      mask.0[v as usize] = true;
+    }
+    return mask;
+  }
+}
+
+impl FromIterator<char> for CharMask {
+  fn from_iter<T: IntoIterator<Item = char>>(iter: T) -> Self {
+    let mut mask = CharMask([false; 53]);
+    for v in iter {
+      match v {
+        'a'..='z' => mask.0[(v as u8 - b'a' + 1) as usize] = true,
+        'A'..='Z' => mask.0[(v as u8 - b'A' + 26 + 1) as usize] = true,
+        _ => panic!("not possible"),
+      }
+    }
+    return mask;
+  }
+}
+
+impl FromIterator<usize> for CharMask {
+  fn from_iter<T: IntoIterator<Item = usize>>(iter: T) -> Self {
+    let mut mask = CharMask([false; 53]);
+    for v in iter {
+      mask.0[v] = true;
+    }
+    return mask;
+  }
+}
+
+impl IntoIterator for CharMask {
+  type Item = usize;
+
+  type IntoIter = std::iter::FilterMap<
+    std::iter::Enumerate<std::array::IntoIter<bool, 53>>,
+    &'static dyn Fn((usize, bool)) -> Option<Self::Item>,
+  >;
+
+  fn into_iter(self) -> Self::IntoIter {
+    return self.0.into_iter().enumerate().filter_map(&|(a, b)| {
+      if b {
+        Some(a)
+      } else {
+        None
+      }
+    });
+  }
+}
+
+impl CharMask {
+  pub fn intersect(&mut self, other: &CharMask) -> &mut CharMask {
+    for (i, v) in other.0.iter().enumerate() {
+      self.0[i] &= v;
+    }
+    return self;
+  }
+}
