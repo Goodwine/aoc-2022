@@ -68,10 +68,7 @@ impl Point {
     let min_j = if self.1 == 0 { 0 } else { -1 };
     let max_i = data.len();
     let max_j = data[0].len();
-    let current = match data[self.0][self.1] {
-      b'S' => b'a' - 1,
-      v => v,
-    };
+    let current = fix_altitude(data[self.0][self.1]);
     return (min_i..=1)
       .flat_map(|di: i32| {
         (min_j..=1)
@@ -80,8 +77,9 @@ impl Point {
       // XOR makes sure only one changed, not both and not none.
       .filter(|&(i, j)| (i == self.0) != (j == self.1))
       .filter(|&(i, j)| i < max_i && j < max_j)
-      .filter(|&(i, j)| data[i][j] <= current + 1)
-      .map(|(i, j)| Point(i, j))
+      .map(|(i, j)| (i, j, fix_altitude(data[i][j])))
+      .filter(|&(_, _, c)| c <= current + 1)
+      .map(|(i, j, _)| Point(i, j))
       .filter(|p| !seen.contains(p))
       .collect();
   }
@@ -95,4 +93,12 @@ fn find(target: u8, data: &Vec<Vec<u8>>) -> Point {
     .find(|(_, _, c)| **c == target)
     .unwrap();
   return Point(i, j);
+}
+
+fn fix_altitude(c: u8) -> u8 {
+  match c {
+    b'S' => b'a',
+    b'E' => b'z',
+    _ => c,
+  }
 }
