@@ -101,22 +101,22 @@ fn p1(data: Vec<Packet>) -> usize {
     .sum();
 }
 
+/// Originally I just did `[...data, p1, p2].sort()`, but I don't really need to
+/// sort. I can simply count how many are less than `p1` and `p2`.
 fn p2(data: Vec<Packet>) -> usize {
-  let mut data = data.clone();
-
   let p1 = Packet::from_str("[[2]]").unwrap();
   let p2 = Packet::from_str("[[6]]").unwrap();
 
-  data.push(p1.clone());
-  data.push(p2.clone());
+  let mut p1_index = data.iter().filter(|p| p.cmp(&&p1).is_lt()).count();
+  let mut p2_index = data.iter().filter(|p| p.cmp(&&p2).is_lt()).count();
 
-  data.sort();
+  // Add 1 because the problem says packets are one-indexed.
+  p1_index += 1;
 
-  return data
-    .iter()
-    .enumerate()
-    .filter(|(_, packet)| **packet == p1 || **packet == p2)
-    .map(|(i, _)| i + 1)
-    .reduce(|acc, v| acc * v)
-    .unwrap();
+  // Add 2:
+  // - One becase the problem says packets are one-indexed.
+  // - Another because we never added `[[2]]` to the list.
+  p2_index += 2;
+
+  return p1_index * p2_index;
 }
