@@ -15,7 +15,7 @@ fn main() {
     &p2,
   );
 }
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 enum Packet {
   Number(u8),
   List(Vec<Packet>),
@@ -60,30 +60,27 @@ impl Packet {
 
     return (Self::Number(number_raw.parse().unwrap()), number_raw.len());
   }
+}
 
-  /// Returns whether `self` is less than `other`. When they are equal it returns `None`.
-  fn less_than(&self, other: &Self) -> Option<bool> {
-    match (self, other) {
-      (Self::Number(a), Self::Number(b)) => {
-        if a == b {
-          None
-        } else {
-          Some(a < b)
-        }
-      }
-      (Self::List(a), Self::List(b)) => {
-        a.iter()
-          .zip(b)
-          .find_map(|(a, b)| a.less_than(b))
-          .or(if a.len() == b.len() {
-            None
-          } else {
-            Some(a.len() < b.len())
-          })
-      }
-      (Self::List(_), Self::Number(b)) => self.less_than(&Self::List(vec![Self::Number(*b)])),
-      (Self::Number(a), Self::List(_)) => Self::List(vec![Self::Number(*a)]).less_than(other),
-    }
+impl Ord for Packet {
+  fn cmp(&self, other: &Self) -> Ordering {
+    return match (self, other) {
+      (Self::Number(a), Self::Number(b)) => a.cmp(b),
+      (Self::List(a), Self::List(b)) => a
+        .iter()
+        .zip(b)
+        .map(|(a, b)| a.cmp(b))
+        .find(|ordering| ordering.is_ne())
+        .unwrap_or(a.len().cmp(&b.len())),
+      (Self::List(_), Self::Number(b)) => self.cmp(&Self::List(vec![Self::Number(*b)])),
+      (Self::Number(a), Self::List(_)) => Self::List(vec![Self::Number(*a)]).cmp(other),
+    };
+  }
+}
+
+impl PartialOrd for Packet {
+  fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+    return Some(self.cmp(other));
   }
 }
 
@@ -99,7 +96,7 @@ fn p1(data: Vec<Packet>) -> usize {
   return data
     .chunks(2)
     .enumerate()
-    .filter(|(_, pair)| pair[0].less_than(&pair[1]).unwrap_or(true))
+    .filter(|(_, pair)| pair[0].cmp(&pair[1]).is_le())
     .map(|(index, _)| index + 1)
     .sum();
 }
@@ -113,11 +110,7 @@ fn p2(data: Vec<Packet>) -> usize {
   data.push(p1.clone());
   data.push(p2.clone());
 
-  data.sort_by(|a, b| match a.less_than(b) {
-    Some(true) => Ordering::Less,
-    Some(false) => Ordering::Greater,
-    None => Ordering::Equal,
-  });
+  data.sort();
 
   return data
     .iter()
