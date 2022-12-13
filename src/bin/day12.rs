@@ -16,29 +16,18 @@ fn main() {
 }
 
 fn p1(data: Vec<Vec<u8>>) -> usize {
-  let start = find(b'S', &data);
-  let end = find(b'E', &data);
-
-  return shortest_path_len(&data, start, end);
+  // Problem states S->E, but it's faster to go E to S.
+  let start = find(b'E', &data);
+  return shortest_path_len(&data, start, b'S');
 }
 
 fn p2(data: Vec<Vec<u8>>) -> usize {
-  let end = find(b'E', &data);
-
-  return data
-    .iter()
-    .enumerate()
-    .flat_map(|(i, line)| line.iter().enumerate().map(move |(j, c)| (i, j, c)))
-    .filter_map(|(i, j, c)| match c {
-      b'S' | b'a' => Some(Point(i, j)),
-      _ => None,
-    })
-    .map(|start| shortest_path_len(&data, start, end))
-    .min()
-    .unwrap();
+  // Problem states any(a)->E, but it's faster to go E to any(a).
+  let start = find(b'E', &data);
+  return shortest_path_len(&data, start, b'a');
 }
 
-fn shortest_path_len(data: &Vec<Vec<u8>>, start: Point, end: Point) -> usize {
+fn shortest_path_len(data: &Vec<Vec<u8>>, start: Point, end: u8) -> usize {
   let mut queue: LinkedList<(usize, Point)> = LinkedList::from([(0, start)]);
   let mut seen: HashSet<Point> = HashSet::new();
   while !queue.is_empty() {
@@ -47,7 +36,8 @@ fn shortest_path_len(data: &Vec<Vec<u8>>, start: Point, end: Point) -> usize {
       continue;
     }
 
-    if current == end {
+    let Point(i, j) = current;
+    if data[i][j] == end {
       return steps;
     }
 
@@ -78,7 +68,11 @@ impl Point {
       .filter(|&(i, j)| (i == self.0) != (j == self.1))
       .filter(|&(i, j)| i < max_i && j < max_j)
       .map(|(i, j)| (i, j, fix_altitude(data[i][j])))
-      .filter(|&(_, _, c)| c <= current + 1)
+      // The problem states that you can jump up +1 or down any number.
+      // However, navigating the maze (most mazes?) is faster backwards.
+      // So instead walking from the "end" to the "start" we check that we can
+      // only drop down -1 or up any number.
+      .filter(|&(_, _, c)| c >= current - 1)
       .map(|(i, j, _)| Point(i, j))
       .filter(|p| !seen.contains(p))
       .collect();
