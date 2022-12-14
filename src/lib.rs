@@ -69,17 +69,22 @@ impl Display for Duration {
     let micros = self.0.as_micros() % 1_000;
     let nanos = self.0.as_nanos() % 1_000;
 
-    let output = [(seconds, "s"), (millis, "m"), (micros, "µ"), (nanos, "n")]
-      .iter()
-      .filter_map(|&(n, u)| {
-        if n == 0 {
-          None
-        } else {
-          Some(format!("{n}{u}"))
-        }
-      })
-      .collect::<Vec<String>>()
-      .join(" ");
+    let output = [
+      (seconds, "s"),
+      (millis, "ms"),
+      (micros, "µs"),
+      (nanos, "ns"),
+    ]
+    .iter()
+    .filter_map(|&(n, u)| {
+      if n == 0 {
+        None
+      } else {
+        Some(format!("{n}{u}"))
+      }
+    })
+    .collect::<Vec<String>>()
+    .join(" ");
 
     return write!(f, "{output}");
   }
