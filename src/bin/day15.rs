@@ -1,3 +1,4 @@
+use ranges::Ranges;
 use std::collections::HashSet;
 
 use aoc;
@@ -61,10 +62,19 @@ fn p1(data: Vec<(Point, Point, u64)>) -> usize {
       // scanned, so it's impossible for there to be an unknown beacon there.
       y_dist => Some((s.x, beacon_dist - y_dist)),
     })
-    .flat_map(|(x, n)| ((x - n as i64)..=(x + n as i64)).map(move |x| Point { x, y: target }))
-    .collect::<HashSet<_>>();
+    // This can be optimized by merging the ranges
+    .map(|(x, n)| Ranges::from((x - n as i64)..=(x + n as i64)))
+    .reduce(|acc, v| acc | v)
+    .unwrap();
 
-  return scanned.difference(&taken).count();
+  // For whatever reason the ranges crate doesn't have a proper "count" function.
+  let count: usize = scanned
+    .as_slice()
+    .iter()
+    .map(|g| g.into_iter().count())
+    .sum();
+
+  return count - taken.len();
 }
 
 fn p2(data: Vec<(Point, Point, u64)>) -> i64 {
