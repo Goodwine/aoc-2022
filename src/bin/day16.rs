@@ -102,7 +102,9 @@ impl BitMask {
 fn p1(data: Vec<Valve>) -> usize {
   let mut dp: HashMap<DPKey, usize> = HashMap::new();
   let open = BitMask(0, data.len());
-  return mochila(&mut dp, &data, open, &0, 0, 30);
+  const DAYS: usize = 30;
+  let start = data.iter().position(|v| v.name == "AA").unwrap();
+  return mochila(&mut dp, &data, open, &start, 0, DAYS - 1);
 }
 
 fn p2(data: Vec<Valve>) -> usize {
@@ -142,17 +144,22 @@ fn mochila(
     // No point on walking to valves that are already open.
     .filter(|(valve, _)| valve_state.is_closed(valve))
     .map(|(valve, cost)| {
+      // This adjust is necessary because while we only select valves with certain
+      // flow rate, we may start with a valve that has zero flow rate.
+      let adjust = current.flow.clamp(0, 1);
+      let next_ppm = ppm + current.flow;
       return mochila(
         dp,
         data,
         valve_state.open(valve),
         valve,
-        current.flow + ppm,
-        limit - cost,
-      ) + cost * ppm;
+        next_ppm,
+        limit - cost - adjust,
+      ) + ppm
+        + next_ppm * cost;
     })
     .max()
-    .unwrap_or(ppm * limit);
+    .unwrap_or(ppm + (ppm + current.flow) * limit);
 
   dp.insert(dp_key, max_release);
   return max_release;
