@@ -84,12 +84,25 @@ struct Valve {
   edges: Vec<(usize, usize)>,
 }
 
+impl Valve {
+  fn next_edges(&self, valve_state: &BitMask, limit: &usize) -> Vec<&(usize, usize)> {
+    return self
+      .edges
+      .iter()
+      // Can't walk to valves that are too far away.
+      .filter(|(_, cost)| limit > cost)
+      // No point on walking to valves that are already open.
+      .filter(|(valve, _)| valve_state.is_closed(valve))
+      .collect();
+  }
+}
+
 #[derive(Clone, Copy)]
-struct BitMask(u64, usize);
+struct BitMask(u64);
 
 impl BitMask {
   fn open(&self, valve: &usize) -> Self {
-    return BitMask(self.0 | (1 << valve), self.1);
+    return BitMask(self.0 | (1 << valve));
   }
   fn is_open(&self, valve: &usize) -> bool {
     return self.0 & (1 << valve) != 0;
@@ -100,31 +113,40 @@ impl BitMask {
 }
 
 fn p1(data: Vec<Valve>) -> usize {
-  let valve_state = BitMask(0, data.len());
+  let valve_state = BitMask(0);
   const DAYS: usize = 30;
   let start = data.iter().position(|v| v.name == "AA").unwrap();
-  return mochila(&data, valve_state, &start, 0, DAYS - 1);
+  return mochila(
+    &data,
+    valve_state,
+    &start,
+    // This way we simulate only having one worker because it'll never become available.
+    &(0, std::usize::MAX),
+    0,
+    DAYS - 1,
+  );
 }
 
 fn p2(data: Vec<Valve>) -> usize {
-  return data.len();
+  let valve_state = BitMask(0);
+  const DAYS: usize = 30;
+  let start = data.iter().position(|v| v.name == "AA").unwrap();
+  return mochila(&data, valve_state, &start, &(start, 0), 0, DAYS - 1);
 }
 
 fn mochila(
   data: &Vec<Valve>,
   valve_state: BitMask,
-  valve: &usize,
+  active: &usize,
+  limbo: &(usize, usize),
   total_flow: usize,
   limit: usize,
 ) -> usize {
-  let current = &data[*valve];
+  let current = &data[*active];
+
   let max_release = current
-    .edges
+    .next_edges(&valve_state, &limit)
     .iter()
-    // Can't walk to valves that are too far away.
-    .filter(|(_, cost)| &limit > cost)
-    // No point on walking to valves that are already open.
-    .filter(|(valve, _)| valve_state.is_closed(valve))
     .map(|(valve, cost)| {
       // This adjust is necessary because while we only select valves with certain
       // flow rate, we may start with a valve that has zero flow rate.
@@ -133,6 +155,7 @@ fn mochila(
         data,
         valve_state.open(valve),
         valve,
+        limbo,
         total_flow + current.flow * limit,
         limit - cost - adjust,
       );
