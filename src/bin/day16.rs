@@ -147,24 +147,39 @@ fn parallel_mochila(
   let a_edges = valve_a.next_edges(&valve_state, &limit);
   let b_edges = valve_b.next_edges(&valve_state, &limit);
 
-  let move_options = a_edges
+  let singles = if let ([a], b @ [..]) | (b @ [..], [a]) = (a_edges.as_slice(), b_edges.as_slice())
+  {
+    b.iter()
+      .filter(|(v, _)| *v == a.0)
+      .chain([a])
+      .map(|(_, cost)| limit - cost - 1)
+      .map(|limit| total_flow + valve_a.flow * limit)
+      .max()
+  } else {
+    None
+  };
+
+  let (with_limbo, parallel_again): (Vec<_>, Vec<_>) = a_edges
     .iter()
     .flat_map(|a| b_edges.iter().map(move |b| (a, b)))
     .filter(|((a, _), (b, _))| a != b)
     .map(|((a, cost_a), (b, cost_b))| {
+      let valve_a = &data[*a];
+      let valve_b = &data[*b];
+      let combined_flow = valve_a.flow + valve_b.flow;
       // Precompute updated flow state and total flow for the option
       // if it is to be taken.
       (
         (a, cost_a),
         (b, cost_b),
         valve_state.open(a).open(b),
-        total_flow + (cost_a + cost_b) * limit,
+        total_flow + combined_flow * limit,
       )
-    });
+    })
+    .partition(|((_, a), (_, b), ..)| a != b);
 
-  let with_limbo = move_options
-    .clone()
-    .filter(|((_, a), (_, b), ..)| a != b)
+  let with_limbo = with_limbo
+    .iter()
     .map(|(a, b, valve_state, total_flow)| {
       // Flip to make sure "a" is always lower than "b"
       if a.1 < b.1 {
@@ -173,7 +188,7 @@ fn parallel_mochila(
         (b, a, valve_state, total_flow)
       }
     })
-    .map(|((a, cost_a), (b, cost_b), valve_state, total_flow)| {
+    .map(|((a, &cost_a), (b, &cost_b), &valve_state, &total_flow)| {
       mochila(
         data,
         valve_state,
@@ -190,16 +205,19 @@ fn parallel_mochila(
   // // we may start with a valve that has zero flow rate.
   // let adjust = current.flow.clamp(0, 1);
 
-  let parallel_again = move_options
-    .filter(|((_, a), (_, b), ..)| a == b)
-    .map(|((a, cost), (b, _), valve_state, total_flow)| {
-      parallel_mochila(data, a, b, valve_state, limit - cost - 1, total_flow)
+  let parallel_again = parallel_again
+    .iter()
+    .map(|((a, &cost), (b, _), valve_state, total_flow)| {
+      parallel_mochila(data, a, b, *valve_state, limit - cost - 1, *total_flow)
     })
     .max();
 
   // We must return total_flow rather than zero in the event nothing else is found
   // because this whole thing is accumulating in the arguments.
-  return with_limbo.max(parallel_again).unwrap_or(total_flow);
+  return singles
+    .max(with_limbo)
+    .max(parallel_again)
+    .unwrap_or(total_flow);
 }
 
 fn mochila(
@@ -218,6 +236,7 @@ fn mochila(
   }
 
   let current = &data[*active];
+  let total_flow = total_flow + current.flow * limit;
   // Normally we would just subtract 1 because it costs 1 minute to open a valve.
   // But this is necessary because while we only select valves with >0 flow rate,
   // we may start with a valve that has zero flow rate.
@@ -227,33 +246,38 @@ fn mochila(
     .iter()
     .map(|(valve, cost)| {
       let valve_state = valve_state.open(valve);
-      let total_flow = total_flow + current.flow * limit;
       let (limbo_target, limbo_left) = limbo;
+      let cost = cost + adjust;
 
-      if limbo_left >= *cost {
+      if limbo_left >= cost {
         return mochila(
           data,
           valve_state,
           valve,
           (limbo_target, limbo_left - cost),
           total_flow,
-          limit - cost - adjust,
+          limit - cost,
         );
       }
 
+      // Limbo valve was already open and taken into account. Calling this function
+      // Will cause the valve to be considered once more!
+      // Subtract the amount that will be added back on the next turn.
+      let limbo_flow = &data[*limbo_target].flow;
+      let total_flow = total_flow - (limbo_flow * (limit - limbo_left));
+
       return mochila(
         data,
-        valve_state.open(valve),
-        // TODO: problem, valve was already open... we don't want to take it into account again.
+        valve_state,
         limbo_target,
         // Flip who is in limbo.
-        (valve, cost - limbo_left + adjust),
+        (valve, cost - limbo_left),
         total_flow,
         limit - limbo_left,
       );
     })
     .max()
-    .unwrap_or(total_flow + current.flow * limit);
+    .unwrap_or(total_flow);
 
   return max_release;
 }
