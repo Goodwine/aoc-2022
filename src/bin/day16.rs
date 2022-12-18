@@ -123,15 +123,23 @@ fn p1(data: Vec<Valve>) -> usize {
     // This way we simulate only having one worker because it'll never become available.
     (&0, std::usize::MAX),
     0,
-    DAYS - 1,
+    DAYS,
   );
 }
 
 fn p2(data: Vec<Valve>) -> usize {
   let valve_state = BitMask(0);
   const DAYS: usize = 30;
+  const ELEPHANT_TRAINING: usize = 4;
   let start = data.iter().position(|v| v.name == "AA").unwrap();
-  return mochila(&data, valve_state, &start, (&start, 0), 0, DAYS - 1);
+  return parallel_mochila(
+    &data,
+    &start,
+    &start,
+    valve_state,
+    DAYS - ELEPHANT_TRAINING,
+    0,
+  );
 }
 
 fn parallel_mochila(
@@ -144,14 +152,22 @@ fn parallel_mochila(
 ) -> usize {
   let valve_a = &data[*a];
   let valve_b = &data[*b];
+
+  // Pay the cost of opening the valve.
+  let adjust = valve_a.flow.clamp(0, 1);
+  let limit = limit - adjust;
+  let total_flow = total_flow + (valve_a.flow + valve_b.flow) * limit;
+
   let a_edges = valve_a.next_edges(&valve_state, &limit);
   let b_edges = valve_b.next_edges(&valve_state, &limit);
 
   let singles = if let ([a], b @ [..]) | (b @ [..], [a]) = (a_edges.as_slice(), b_edges.as_slice())
   {
+    let valve_a = &data[a.0];
     b.iter()
       .filter(|(v, _)| *v == a.0)
       .chain([a])
+      // -1 to pay the cost of opening the last valve.
       .map(|(_, cost)| limit - cost - 1)
       .map(|limit| total_flow + valve_a.flow * limit)
       .max()
@@ -159,118 +175,69 @@ fn parallel_mochila(
     None
   };
 
-  let (with_limbo, parallel_again): (Vec<_>, Vec<_>) = a_edges
+  let with_limbo = a_edges
     .iter()
     .flat_map(|a| b_edges.iter().map(move |b| (a, b)))
     .filter(|((a, _), (b, _))| a != b)
+    // Flip to make sure cost for "a" is always lower than or equal to "b"
+    .map(|(a, b)| if a.1 < b.1 { (a, b) } else { (b, a) })
     .map(|((a, cost_a), (b, cost_b))| {
-      let valve_a = &data[*a];
-      let valve_b = &data[*b];
-      let combined_flow = valve_a.flow + valve_b.flow;
-      // Precompute updated flow state and total flow for the option
-      // if it is to be taken.
-      (
-        (a, cost_a),
-        (b, cost_b),
-        valve_state.open(a).open(b),
-        total_flow + combined_flow * limit,
-      )
-    })
-    .partition(|((_, a), (_, b), ..)| a != b);
-
-  let with_limbo = with_limbo
-    .iter()
-    .map(|(a, b, valve_state, total_flow)| {
-      // Flip to make sure "a" is always lower than "b"
-      if a.1 < b.1 {
-        (a, b, valve_state, total_flow)
-      } else {
-        (b, a, valve_state, total_flow)
-      }
-    })
-    .map(|((a, &cost_a), (b, &cost_b), &valve_state, &total_flow)| {
       mochila(
         data,
-        valve_state,
+        valve_state.open(a).open(b),
         a,
         (b, cost_b - cost_a),
         total_flow,
-        limit - cost_a - 1,
+        limit - cost_a,
       )
-    })
-    .max();
-
-  // // Normally we would just subtract 1 because it costs 1 minute to open a valve.
-  // // But this is necessary because while we only select valves with >0 flow rate,
-  // // we may start with a valve that has zero flow rate.
-  // let adjust = current.flow.clamp(0, 1);
-
-  let parallel_again = parallel_again
-    .iter()
-    .map(|((a, &cost), (b, _), valve_state, total_flow)| {
-      parallel_mochila(data, a, b, *valve_state, limit - cost - 1, *total_flow)
     })
     .max();
 
   // We must return total_flow rather than zero in the event nothing else is found
   // because this whole thing is accumulating in the arguments.
-  return singles
-    .max(with_limbo)
-    .max(parallel_again)
-    .unwrap_or(total_flow);
+  return singles.max(with_limbo).unwrap_or(total_flow);
 }
 
 fn mochila(
   data: &Vec<Valve>,
   valve_state: BitMask,
   active: &usize,
-  limbo: (&usize, usize),
+  (limbo, limbo_left): (&usize, usize),
   total_flow: usize,
   limit: usize,
 ) -> usize {
-  // If this is true it means both workers are to move to the next valves simultaneously.
-  // Both "active" and "limbo" valves have been opened and their flows taken
-  // into account, don't count them again, please.
-  if let (limbo, _left @ 0) = limbo {
+  if limbo_left == 0 {
     return parallel_mochila(data, active, limbo, valve_state, limit, total_flow);
   }
 
   let current = &data[*active];
-  let total_flow = total_flow + current.flow * limit;
-  // Normally we would just subtract 1 because it costs 1 minute to open a valve.
-  // But this is necessary because while we only select valves with >0 flow rate,
-  // we may start with a valve that has zero flow rate.
   let adjust = current.flow.clamp(0, 1);
+  let limit = limit - adjust;
+  let limbo_left = limbo_left - adjust;
+  let total_flow = total_flow + current.flow * limit;
+
   let max_release = current
     .next_edges(&valve_state, &limit)
     .iter()
     .map(|(valve, cost)| {
+      let cost = cost;
       let valve_state = valve_state.open(valve);
-      let (limbo_target, limbo_left) = limbo;
-      let cost = cost + adjust;
 
-      if limbo_left >= cost {
+      if limbo_left >= *cost {
         return mochila(
           data,
           valve_state,
           valve,
-          (limbo_target, limbo_left - cost),
+          (limbo, limbo_left - cost),
           total_flow,
           limit - cost,
         );
       }
 
-      // Limbo valve was already open and taken into account. Calling this function
-      // Will cause the valve to be considered once more!
-      // Subtract the amount that will be added back on the next turn.
-      let limbo_flow = &data[*limbo_target].flow;
-      let total_flow = total_flow - (limbo_flow * (limit - limbo_left));
-
       return mochila(
         data,
         valve_state,
-        limbo_target,
-        // Flip who is in limbo.
+        limbo,
         (valve, cost - limbo_left),
         total_flow,
         limit - limbo_left,
