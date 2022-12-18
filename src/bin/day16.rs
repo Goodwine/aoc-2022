@@ -161,18 +161,25 @@ fn parallel_mochila(
   let a_edges = valve_a.next_edges(&valve_state, &limit);
   let b_edges = valve_b.next_edges(&valve_state, &limit);
 
-  let singles = if let ([a], b @ [..]) | (b @ [..], [a]) = (a_edges.as_slice(), b_edges.as_slice())
-  {
-    let valve_a = &data[a.0];
-    b.iter()
-      .filter(|(v, _)| *v == a.0)
-      .chain([a])
-      // -1 to pay the cost of opening the last valve.
-      .map(|(_, cost)| limit - cost - 1)
-      .map(|limit| total_flow + valve_a.flow * limit)
-      .max()
-  } else {
-    None
+  let singles = match (a_edges.as_slice(), b_edges.as_slice()) {
+    ([a], b @ [..]) | (b @ [..], [a]) => {
+      b.iter()
+        .filter(|(v, _)| *v == a.0)
+        .chain([a])
+        // -1 to pay the cost of opening the last valve.
+        .map(|(a, cost)| {
+          mochila(
+            data,
+            valve_state.open(a),
+            a,
+            (&0, std::usize::MAX),
+            total_flow,
+            limit - cost,
+          )
+        })
+        .max()
+    }
+    _ => None,
   };
 
   let with_limbo = a_edges
@@ -180,7 +187,7 @@ fn parallel_mochila(
     .flat_map(|a| b_edges.iter().map(move |b| (a, b)))
     .filter(|((a, _), (b, _))| a != b)
     // Flip to make sure cost for "a" is always lower than or equal to "b"
-    .map(|(a, b)| if a.1 < b.1 { (a, b) } else { (b, a) })
+    .map(|(a, b)| if a.1 <= b.1 { (a, b) } else { (b, a) })
     .map(|((a, cost_a), (b, cost_b))| {
       mochila(
         data,
