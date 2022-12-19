@@ -103,19 +103,19 @@ impl Blueprint {
     time: usize,
     backpack: &Bag,
     robots: &Bag,
-    dp: &mut HashMap<(usize, u128, u128), usize>,
+    dp: &mut HashMap<(u128, u128), (usize, usize)>,
     geodes: usize,
   ) -> usize {
     if time == 0 {
       return geodes;
     }
 
-    let k = (time, backpack.0, robots.0);
+    let k = (backpack.0, robots.0);
     match dp.get(&k) {
       // Don't explore a branch that would result in fewer geodes.
-      Some(v) if v >= &geodes => return 0,
+      Some((v, t)) if v >= &geodes && t >= &time => return 0,
       // Record how many geodes are to be generated so far.
-      _ => dp.insert(k, geodes),
+      _ => dp.insert(k, (geodes, time)),
     };
 
     let result = self
