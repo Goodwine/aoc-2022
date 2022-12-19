@@ -56,7 +56,7 @@ where
   T2: Debug,
   D: Clone,
 {
-  internal_solve("small", reader, p1, p2);
+  // internal_solve("small", reader, p1, p2);
   internal_solve("input", reader, p1, p2);
 }
 

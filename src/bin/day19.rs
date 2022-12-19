@@ -1,4 +1,5 @@
-use std::collections::{HashMap, HashSet};
+#![feature(map_first_last)]
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 use aoc;
 use rayon::prelude::*;
@@ -41,7 +42,7 @@ impl From<&String> for Blueprint {
   }
 }
 
-#[derive(Clone, Eq, PartialEq, Hash, Debug)]
+#[derive(Clone, Eq, PartialEq, Hash, Debug, PartialOrd, Ord)]
 struct Bag(u128);
 
 fn p1(data: Vec<Blueprint>) -> usize {
@@ -60,7 +61,7 @@ fn p2(mut data: Vec<Blueprint>) -> usize {
 fn solve(data: Vec<Blueprint>, time: usize) -> Vec<usize> {
   return data
     .par_iter()
-    .map(|b| b.eval(time, &Bag(0), &Bag(1), &mut HashMap::new(), 0))
+    .map(|b| b.eval(time, Bag(0), Bag(1)))
     .enumerate()
     .map(|(i, v)| {
       println!("done {}, {v}", i + 1);
@@ -98,32 +99,33 @@ impl Blueprint {
     return options;
   }
 
-  fn eval(
-    &self,
-    time: usize,
-    backpack: &Bag,
-    robots: &Bag,
-    dp: &mut HashMap<(u128, u128), (usize, usize)>,
-    geodes: usize,
-  ) -> usize {
-    if time == 0 {
-      return geodes;
+  fn eval(&self, time: usize, backpack: Bag, robots: Bag) -> usize {
+    // let mut work = vec![(0, time, backpack, robots)];
+    let mut work = BTreeSet::from([(0, time, backpack, robots)]);
+    let mut dp = HashMap::new();
+    let mut result = 0;
+
+    while !work.is_empty() {
+      let (geodes, time, backpack, robots) = work.pop_last().unwrap();
+
+      if time == 0 {
+        result = result.max(geodes);
+        continue;
+      }
+
+      let k = (backpack.0, robots.0);
+      match dp.get(&k) {
+        // Don't explore a branch that would result in fewer geodes.
+        Some((v, t)) if v >= &geodes && t >= &time => continue,
+        // Record how many geodes are to be generated so far.
+        _ => dp.insert(k, (geodes, time)),
+      };
+
+      let options = self.options(&backpack, &robots, time);
+      for (bp, r, dg) in options {
+        work.insert((geodes + dg, time - 1, Bag(bp.0 + robots.0), r));
+      }
     }
-
-    let k = (backpack.0, robots.0);
-    match dp.get(&k) {
-      // Don't explore a branch that would result in fewer geodes.
-      Some((v, t)) if v >= &geodes && t >= &time => return 0,
-      // Record how many geodes are to be generated so far.
-      _ => dp.insert(k, (geodes, time)),
-    };
-
-    let result = self
-      .options(&backpack, &robots, time)
-      .iter()
-      .map(|(bp, r, dg)| self.eval(time - 1, &Bag(bp.0 + robots.0), r, dp, geodes + dg))
-      .max()
-      .unwrap();
 
     return result;
   }
