@@ -1,5 +1,4 @@
-#![feature(map_first_last)]
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::HashSet;
 
 use aoc;
 use rayon::prelude::*;
@@ -62,75 +61,76 @@ fn solve(data: Vec<Blueprint>, time: usize) -> Vec<usize> {
   return data
     .par_iter()
     .map(|b| b.eval(time, Bag(0), Bag(1)))
-    .enumerate()
-    .map(|(i, v)| {
-      println!("done {}, {v}", i + 1);
-      return v;
-    })
     .collect();
 }
 
 impl Blueprint {
-  fn options(&self, backpack: &Bag, robots: &Bag, time: usize) -> HashSet<(Bag, Bag, usize)> {
-    let mut options: HashSet<(Bag, Bag, usize)> =
-      HashSet::from([(backpack.clone(), robots.clone(), 0)]);
+  fn options(
+    &self,
+    backpack: &Bag,
+    robots: &Bag,
+    geodes: usize,
+    time: usize,
+  ) -> Vec<(Bag, Bag, usize)> {
+    let mut options = vec![(Bag(backpack.0 + robots.0), robots.clone(), geodes)];
 
     if backpack.contains(&self.geode) {
-      let bp = Bag(backpack.0 - &self.geode.0);
+      let bp = Bag(backpack.0 - &self.geode.0 + robots.0);
       // Add all geodes that would be created by a geode robot during the time left.
-      options.insert((bp, robots.clone(), time - 1));
+      options.push((bp, robots.clone(), geodes + time - 1));
     }
     if backpack.contains(&self.obsidian) {
-      let bp = Bag(backpack.0 - &self.obsidian.0);
+      let bp = Bag(backpack.0 - &self.obsidian.0 + robots.0);
       let r = Bag(robots.0 + (1 << 64));
-      options.insert((bp, r, 0));
+      options.push((bp, r, geodes));
     }
     if backpack.contains(&self.clay) {
-      let bp = Bag(backpack.0 - &self.clay.0);
+      let bp = Bag(backpack.0 - &self.clay.0 + robots.0);
       let r = Bag(robots.0 + (1 << 32));
-      options.insert((bp, r, 0));
+      options.push((bp, r, geodes));
     }
     if backpack.contains(&self.ore) {
-      let bp = Bag(backpack.0 - &self.ore.0);
+      let bp = Bag(backpack.0 - &self.ore.0 + robots.0);
       let r = Bag(robots.0 + 1);
-      options.insert((bp, r, 0));
+      options.push((bp, r, geodes));
     }
 
     return options;
   }
 
+  /// Because the problem statement mentions how getting geode robots earlier will
+  /// give better returns, instead of using DP to explode all the options one by
+  /// one and using DP to avoid looking at certain branches.. we can use BFS with
+  /// with aggressive prunning after each layer.
+  ///
+  /// Prunning happens by giving the most importance to geodes-generated followed
+  /// by robots and followed by whatever is in the backpack. Instead of exploring
+  /// we can discard every layer under a threshold.
+  /// (e.g. discard anything beyond 1000).
   fn eval(&self, time: usize, backpack: Bag, robots: Bag) -> usize {
-    // let mut work = vec![(0, time, backpack, robots)];
-    let mut work = BTreeSet::from([(0, time, backpack, robots)]);
-    let mut dp = HashMap::new();
-    let mut result = 0;
-    let max_size = 0;
+    // The order of [GEODES, ROBOTS, BACKPACK] in the tuple is important for prunning.
+    // because we call sort().
+    let mut work = vec![(0, robots.clone(), backpack)];
 
-    while !work.is_empty() {
-      max_size = work.len().max(max_size);
-      let (geodes, time, backpack, robots) = work.pop_last().unwrap();
+    for time in (1..=time).rev() {
+      let next_work = work
+        .iter()
+        // Everything below here is messy (swapping left and right) because I had
+        // to change the ordering of the tuple for sorting because I didn't want to
+        // implement custom sorting.
+        .flat_map(|(geodes, r, bp)| self.options(bp, r, *geodes, time))
+        .collect::<HashSet<_>>();
 
-      if time == 0 {
-        result = result.max(geodes);
-        continue;
-      }
+      work = next_work
+        .iter()
+        .map(|(bp, r, geodes)| (*geodes, r.clone(), bp.clone()))
+        .collect();
 
-      let k = (backpack.0, robots.0);
-      match dp.get(&k) {
-        // Don't explore a branch that would result in fewer geodes.
-        Some((v, t)) if v >= &geodes && t >= &time => continue,
-        // Record how many geodes are to be generated so far.
-        _ => dp.insert(k, (geodes, time)),
-      };
-
-      let options = self.options(&backpack, &robots, time);
-      for (bp, r, dg) in options {
-        work.insert((geodes + dg, time - 1, Bag(bp.0 + robots.0), r));
-      }
+      work.sort_by(|a, b| a.cmp(b).reverse());
+      work.truncate(1000);
     }
-    println!("max_size: {max_size}");
 
-    return result;
+    return *work.iter().map(|(g, ..)| g).max().unwrap();
   }
 }
 
