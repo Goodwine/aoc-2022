@@ -60,7 +60,7 @@ fn p2(mut data: Vec<Blueprint>) -> usize {
 fn solve(data: Vec<Blueprint>, time: usize) -> Vec<usize> {
   return data
     .par_iter()
-    .map(|b| b.eval(time, &Bag(0), &Bag(1), &mut HashMap::new()))
+    .map(|b| b.eval(time, &Bag(0), &Bag(1), &mut HashMap::new(), 0))
     .enumerate()
     .map(|(i, v)| {
       println!("done {}, {v}", i + 1);
@@ -70,28 +70,29 @@ fn solve(data: Vec<Blueprint>, time: usize) -> Vec<usize> {
 }
 
 impl Blueprint {
-  fn options(&self, backpack: &Bag, robots: &Bag) -> HashSet<(Bag, Bag)> {
-    let mut options: HashSet<(Bag, Bag)> = HashSet::from([(backpack.clone(), robots.clone())]);
+  fn options(&self, backpack: &Bag, robots: &Bag, time: usize) -> HashSet<(Bag, Bag, usize)> {
+    let mut options: HashSet<(Bag, Bag, usize)> =
+      HashSet::from([(backpack.clone(), robots.clone(), 0)]);
 
     if backpack.contains(&self.geode) {
       let bp = Bag(backpack.0 - &self.geode.0);
-      let r = Bag(robots.0 + (1 << 96));
-      options.insert((bp, r));
+      // Add all geodes that would be created by a geode robot during the time left.
+      options.insert((bp, robots.clone(), time - 1));
     }
     if backpack.contains(&self.obsidian) {
       let bp = Bag(backpack.0 - &self.obsidian.0);
       let r = Bag(robots.0 + (1 << 64));
-      options.insert((bp, r));
+      options.insert((bp, r, 0));
     }
     if backpack.contains(&self.clay) {
       let bp = Bag(backpack.0 - &self.clay.0);
       let r = Bag(robots.0 + (1 << 32));
-      options.insert((bp, r));
+      options.insert((bp, r, 0));
     }
     if backpack.contains(&self.ore) {
       let bp = Bag(backpack.0 - &self.ore.0);
       let r = Bag(robots.0 + 1);
-      options.insert((bp, r));
+      options.insert((bp, r, 0));
     }
 
     return options;
@@ -103,26 +104,27 @@ impl Blueprint {
     backpack: &Bag,
     robots: &Bag,
     dp: &mut HashMap<(usize, u128, u128), usize>,
+    geodes: usize,
   ) -> usize {
     if time == 0 {
-      return backpack.geode();
-    }
-    let k = (time, backpack.0, robots.0);
-    if let Some(v) = dp.get(&k) {
-      return *v;
+      return geodes;
     }
 
+    let k = (time, backpack.0, robots.0);
+    match dp.get(&k) {
+      // Don't explore a branch that would result in fewer geodes.
+      Some(v) if v >= &geodes => return 0,
+      // Record how many geodes are to be generated so far.
+      _ => dp.insert(k, geodes),
+    };
+
     let result = self
-      .options(&backpack, &robots)
+      .options(&backpack, &robots, time)
       .iter()
-      .map(|(bp, r)| (Bag(bp.0 + robots.0), r))
-      .map(|(bp, r)| self.eval(time - 1, &bp, r, dp))
+      .map(|(bp, r, dg)| self.eval(time - 1, &Bag(bp.0 + robots.0), r, dp, geodes + dg))
       .max()
       .unwrap();
 
-    dp.entry(k)
-      .and_modify(|old| *old = old.clone().max(result))
-      .or_insert(result);
     return result;
   }
 }
@@ -130,16 +132,11 @@ impl Blueprint {
 const ORE_MASK: u128 = std::u32::MAX as u128;
 const CLAY_MASK: u128 = ORE_MASK << 32;
 const OBSIDIAN_MASK: u128 = ORE_MASK << 64;
-const GEODE_MASK: u128 = ORE_MASK << 96;
 
 impl Bag {
   fn contains(&self, Self(other): &Self) -> bool {
     return other & ORE_MASK <= self.0 & ORE_MASK
       && other & CLAY_MASK <= self.0 & CLAY_MASK
-      && other & OBSIDIAN_MASK <= self.0 & OBSIDIAN_MASK
-      && other & GEODE_MASK <= self.0 & GEODE_MASK;
-  }
-  fn geode(&self) -> usize {
-    return ((self.0 & GEODE_MASK) >> 96) as usize;
+      && other & OBSIDIAN_MASK <= self.0 & OBSIDIAN_MASK;
   }
 }
