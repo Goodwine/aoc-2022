@@ -104,8 +104,10 @@ impl Blueprint {
     let mut work = BTreeSet::from([(0, time, backpack, robots)]);
     let mut dp = HashMap::new();
     let mut result = 0;
+    let max_size = 0;
 
     while !work.is_empty() {
+      max_size = work.len().max(max_size);
       let (geodes, time, backpack, robots) = work.pop_last().unwrap();
 
       if time == 0 {
@@ -126,6 +128,7 @@ impl Blueprint {
         work.insert((geodes + dg, time - 1, Bag(bp.0 + robots.0), r));
       }
     }
+    println!("max_size: {max_size}");
 
     return result;
   }
